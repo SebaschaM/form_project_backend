@@ -1,13 +1,24 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UsePipes,
+} from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CreateUserValidationPipe } from './create-user-validation/create-user-validation.pipe';
 
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
+  @Post('create-user')
+  @UsePipes(new CreateUserValidationPipe())
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
   }
@@ -22,7 +33,7 @@ export class UserController {
     return this.userService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Patch('update-user/:id')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.userService.update(+id, updateUserDto);
   }
