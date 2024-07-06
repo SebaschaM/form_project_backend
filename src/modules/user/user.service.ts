@@ -1,53 +1,201 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ResponseUserDto,
+  ResponseUsersDto,
+  ResponseWrapperDto,
+} from './dto/reponse-user-dto';
+import { BaseResponseUserDto } from './dto/base-response-user.dto';
 
 @Injectable()
 export class UserService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto): Promise<BaseResponseUserDto> {
     try {
-      // Intenta crear un nuevo usuario con los datos proporcionados en createUserDto
-      const newUser = await this.prisma.cliente.create({
-         data: {
-          nombres: createUserDto.nombres,
-          apellidos: createUserDto.apellidos,
-          edad: createUserDto.edad,
-          direccion: createUserDto.direccion,
-          correo: createUserDto.correo,
-          celular: createUserDto.celular,
-          fecha_nacimiento: createUserDto.fecha_nacimiento ?? new Date(), // Opcional, asigna la fecha actual si no está proporcionada
-          estado_habilitado: createUserDto.estado_habilitado,
+      await this.prisma.cliente.create({
+        data: {
+          ...createUserDto,
         },
       });
-      return newUser;
+
+      return {
+        statusCode: 201,
+        message: 'Usuario creado exitosamente',
+      };
     } catch (error) {
-      // Manejo de errores, por ejemplo, violaciones de restricciones únicas
       if (error.code === 'P2002') {
-        throw new HttpException(
-          'El correo o celular ya está en uso',
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new ConflictException('Correo o celular ya están en uso');
       }
-      throw error; // Lanza otros errores no manejados explícitamente
+      throw new HttpException(
+        'Error interno del servidor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
-  findAll() {
-    return `This action returns all user`;
+  async findAll(): Promise<ResponseUsersDto> {
+    try {
+      const users = await this.prisma.cliente.findMany();
+
+      const responseUsers: ResponseUserDto[] = users.map((user) => ({
+        cliente_id: user.cliente_id,
+        nombres: user.nombres,
+        apellidos: user.apellidos,
+        edad: user.edad,
+        direccion: user.direccion,
+        correo: user.correo,
+        celular: user.celular,
+        fecha_nacimiento: user.fecha_nacimiento?.toISOString() || null,
+        estado_habilitado: user.estado_habilitado,
+        fecha_creacion: user.fecha_creacion.toISOString(),
+        fecha_modificacion: user.fecha_modificacion.toISOString(),
+      }));
+
+      return {
+        statusCode: 200,
+        message: 'Usurios recuperados exitosamente',
+        data: responseUsers,
+      };
+    } catch (error) {
+      throw new HttpException(
+        'Error interno del servidor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  async findOne(id: number): Promise<ResponseWrapperDto> {
+    try {
+      const user = await this.prisma.cliente.findUnique({
+        where: { cliente_id: id },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`Usuario no encontrado`);
+      }
+
+      return new ResponseWrapperDto(
+        HttpStatus.OK,
+        'User retrieved successfully',
+        user,
+      );
+    } catch (error) {
+      throw new HttpException(
+        'Error interno del servidor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  async updateState(id: number): Promise<BaseResponseUserDto> {
+    try {
+      const user = await this.prisma.cliente.findUnique({
+        where: { cliente_id: id },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`Usuario no encontrado`);
+      }
+
+      const updatedUser = await this.prisma.cliente.update({
+        where: { cliente_id: id },
+        data: {
+          estado_habilitado: !user.estado_habilitado,
+        },
+      });
+
+      return new BaseResponseUserDto(
+        HttpStatus.OK,
+        `Estado del usuario cambiado a ${updatedUser.estado_habilitado ? 'habilitado' : 'deshabilitado'}`,
+      );
+    } catch (error) {
+      throw new HttpException(
+        'Error interno del servidor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async update(id: number, updateUserDto: UpdateUserDto): Promise<BaseResponseUserDto> {
+    try {
+      const user = await this.prisma.cliente.findUnique({
+        where: { cliente_id: id },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`Usuario no encontrado`);
+      }
+
+      const updateData = { ...updateUserDto };
+      const hasUpdates = Object.keys(updateData).length > 0;
+
+      if (!hasUpdates) {
+        throw new BadRequestException('Información de usuario no proporcionada');
+      }
+
+      // Comparar los datos proporcionados con los datos existentes
+      const isSameData = Object.keys(updateData).every(key => user[key] === updateData[key]);
+
+      if (isSameData) {
+        throw new BadRequestException('No se realizaron cambios en los datos del usuario');
+      }
+
+      await this.prisma.cliente.update({
+        where: { cliente_id: id },
+        data: updateData,
+      });
+
+      return new BaseResponseUserDto(
+        HttpStatus.OK,
+        'User updated successfully',
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error.code === 'P2002') {
+        throw new ConflictException('Correo o celular ya están en uso');
+      }
+      throw new HttpException(
+        'Error interno del servidor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+  
+  async remove(id: number): Promise<BaseResponseUserDto> {
+    try {
+      const user = await this.prisma.cliente.findUnique({
+        where: { cliente_id: id },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`Usuario no encontrado`);
+      }
+
+      await this.prisma.cliente.delete({
+        where: { cliente_id: id },
+      });
+
+      return new BaseResponseUserDto(
+        HttpStatus.OK,
+        'Usuario eliminado exitosamente',
+      );
+    } catch (error) {
+      throw new HttpException(
+        'Error interno del servidor',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

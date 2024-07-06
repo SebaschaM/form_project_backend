@@ -1,14 +1,12 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
-  IsDate,
   IsEmail,
   IsInt,
   IsOptional,
   IsString,
   Length,
   Matches,
-  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -22,14 +20,15 @@ export class CreateUserDto {
   @Length(4, 50)
   apellidos: string;
 
+  @IsOptional()
   @IsInt()
   @Min(18)
-  @Max(100)
-  edad: number;
+  edad?: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(500)
-  direccion: string;
+  direccion?: string;
 
   @IsEmail()
   @MaxLength(100)
@@ -40,10 +39,19 @@ export class CreateUserDto {
   celular: string;
 
   @IsOptional()
-  @IsDate()
-  @Transform(({ value }) => new Date(value))
-  fecha_nacimiento?: Date;
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const [day, month, year] = value.split('/');
+      if (!day || !month || !year) {
+        throw new Error('Invalid date format. Expected DD/MM/YYYY.');
+      }
+      return new Date(`${year}-${month}-${day}`).toISOString();
+    }
+    return value;
+  })
+  fecha_nacimiento?: string;
 
   @IsBoolean()
+  @Transform(() => true)
   estado_habilitado: boolean;
 }

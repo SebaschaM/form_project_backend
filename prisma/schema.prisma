@@ -9,8 +9,8 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
@@ -18,14 +18,14 @@ model Cliente {
   cliente_id         Int       @id @default(autoincrement())
   nombres            String
   apellidos          String
-  edad               Int
-  direccion          String
-  correo             String
-  celular            String
-  fecha_nacimiento   DateTime
+  edad               Int?
+  direccion          String?
+  correo             String    @unique
+  celular            String    @unique
+  fecha_nacimiento   DateTime?
   estado_habilitado  Boolean
   fecha_creacion     DateTime  @default(now())
   fecha_modificacion DateTime  @updatedAt
 
-  @@map("cliente") // Mapea este modelo a la tabla "cliente"
+  @@map("cliente")
 }
